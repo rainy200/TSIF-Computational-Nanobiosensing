@@ -5,7 +5,7 @@ MATLAB implementation and reproducibility code for the Triadic Swarm Intelligenc
 The repository accompanies the manuscript:
 
 > **Triadic Swarm Intelligence Framework: Toward an Interpretable Process-Level State Descriptor for Computational Nanobiosensing**  
-> Baoyu Ren, Shanchao Wen, Yue Sun, and Yifan Chen
+
 
 ## Repository contents
 
