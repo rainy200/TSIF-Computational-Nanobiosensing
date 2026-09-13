@@ -12,7 +12,7 @@ The repository accompanies the manuscript:
 | File | Purpose |
 |---|---|
 | `code/main_stf_ablation_ECA.m` | Main TSIF-HIVC factorial experiment, component ablations, paired inference, tables, and figures. |
-| `code/main_tsif_aivc_revised.m` | Target-free TSIF-AIVC experiment using a common article-based P-AIVC local layer; includes TSIF-AIVC, `w/o E`, `w/o C`, `w/o A`, Fixed-AIVC, and published P-AIVC comparisons. |
+| `code/main_tsif_aivc_revised.m` | Target-free TSIF-AIVC experiment using a common P-AIVC local layer; includes TSIF-AIVC, `w/o E`, `w/o C`, `w/o A`, Fixed-AIVC, and published P-AIVC comparisons. |
 
 Both files are self-contained MATLAB functions with their helper functions included at the end of the same file.
 
