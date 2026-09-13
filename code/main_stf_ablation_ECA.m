@@ -6,6 +6,7 @@ function main_stf_ablation_ECA(run_mode)
     end
 
     %% ---- Setup ----
+    
     experiment_profile = strtrim(lower(getenv('TSIF_EXPERIMENT_PROFILE')));
     if isempty(experiment_profile), experiment_profile = 'paper'; end
     if contains(lower(run_mode), 'stress_controller_v2_1_confirmatory')
