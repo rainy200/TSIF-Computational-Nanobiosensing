@@ -1,26 +1,11 @@
 function main_tsif_aivc_revised(run_mode)
-%MAIN_TSIF_AIVC_REVISED  Target-free TSIF-on-AIVC comparison family.
+%MAIN_TSIF_AIVC_REVISED Target-free TSIF-on-AIVC comparison.
+% Compares TSIF-AIVC, w/o E, w/o C, w/o A, Fixed-AIVC, and article-based P-AIVC.
+% Control uses positions, neighbor relations, and one local BGF sample per agent;
+% the true target is used only by the common evaluation layer.
 %
-% Six methods are evaluated on one common article-based P-AIVC layer:
-%   tsif_aivc       - dynamic, target-free TSIF E/C/A internal feedback
-%   aivc_no_e       - only the TSIF spatial-entropy pathway is disabled
-%   aivc_no_c       - only the target-free consensus pathway is disabled
-%   aivc_no_a       - only the cooperative-alignment pathway is disabled
-%   fixed_aivc      - non-adaptive TSIF gains frozen from development data
-%   local_only      - article-based P-AIVC local autonomous controller
-%                     without the added TSIF feedback layer
-%
-% No control path receives the true target center, applies external DC, or
-% performs extra finite-difference BGF queries.  The true target is used
-% only by the common evaluation layer after each autonomous update.
-%
-% Usage:
-%   main_tsif_aivc_revised('smoke')   % 24 runs, branch coverage
-%   main_tsif_aivc_revised('quick')   % 432 runs (3 seeds/setting)
-%   main_tsif_aivc_revised('formal')  % 4320 runs (30 seeds/setting)
-%   main_tsif_aivc_revised('merge')   % merge process-level shards
-%   main_tsif_aivc_revised('figures') % redraw from an existing feature CSV
-% Formal runs lock the base seed at 20261217 in setup_design().
+% Modes: smoke (24 runs), quick (432), formal (4320), merge, and figures.
+% Formal runs lock the base seed at 20261217.
 
     if nargin < 1 || isempty(run_mode), run_mode = 'formal'; end
     run_mode = lower(strtrim(char(run_mode)));
@@ -74,15 +59,13 @@ end
 function P = setup_parameters()
     P = struct();
 
-    % Common TSIF benchmark coordinates and budget.
     P.N = 40;
     P.boundary = [-11 11 -11 11];
     P.target = [0 0];
     P.target_radius = 1.0;
     P.max_iteration = 850;
 
-    % Article-based P-AIVC local layer.  Lengths reported for a 0.5-mm
-    % target are mapped by one fixed factor to the common R_T=1 coordinates.
+    % Map article-reported lengths for a 0.5-mm target to the common R_T=1 coordinates.
     P.paivc_length_scale = P.target_radius/0.5;
     P.paivc_neighbor_count = 20;
     P.paivc_migration_step = 0.04*P.paivc_length_scale;
@@ -105,30 +88,23 @@ function P = setup_parameters()
     P.paivc_sampling_T0 = 1.0;            % T0 omitted in article
     P.paivc_repulsion_step_cap = 2*P.paivc_migration_step;
 
-    % Target-free TSIF definitions.  The controller uses no P.target field.
-    % E uses attainable-range-normalized spatial occupancy; C_auto uses local
-    % compactness and relative BGF rank; A_auto reports global coherence while
-    % the controller uses the corresponding neighborhood coherence.  No extra
-    % BGF query is made by any TSIF pathway.
+    % Target-free TSIF uses attainable-range entropy, local compactness and BGF rank,
+    % and neighborhood directional coherence without additional BGF queries.
     P.entropy_bins_per_axis = ceil(sqrt(P.N));
     P.vector_valid_threshold = 1e-12;
     P.progress_ema_alpha = 0.08;
     P.progress_tolerance = 2.5e-4;
 
-    % TSIF-E pathway: spatial diversity schedules the magnitude of the native
-    % BGF-directed migration.  A broadly distributed swarm receives a modest
-    % cruise boost, while a collapsed and stalled swarm receives a stronger
-    % escape boost.  The direction and the number of BGF queries are unchanged.
+    % E schedules native BGF-directed migration magnitude without changing its
+    % direction or number of BGF queries.
     P.E_low = 0.18;
     P.E_high = 0.55;
     P.E_gain = 0.60;
     P.E_gain_min = 1.00;
     P.E_gain_max = 1.48;
 
-    % TSIF-C pathway: local compactness and relative BGF rank gate the native
-    % social displacement and validate the noisy local stopping observation.
-    % Requiring two consecutive locally supported observations prevents a
-    % single positive noise excursion from permanently stopping an agent.
+    % C gates social displacement and validates stopping through local and
+    % temporally confirmed evidence.
     P.C_gain = 0.88;
     P.C_rank_threshold = 0.35;
     P.C_progress_floor = 0.35;
@@ -141,32 +117,23 @@ function P = setup_parameters()
     P.C_rescue_fitness_threshold = 0.97;
     P.C_rescue_gain = 1.00;
 
-    % TSIF-A pathway: blend each valid cooperative direction with the mean of
-    % valid directions in its existing P-AIVC neighborhood.  The blend is
-    % one-sided and norm preserving.  Reliable local agreement also increases
-    % the migration magnitude; low agreement falls back to native P-AIVC.
+    % A blends each cooperative direction with its neighborhood mean using a
+    % one-sided, norm-preserving correction.
     P.A_activation = 0.40;
     P.A_gain = 0.58;
     P.A_max_blend = 0.45;
     P.A_speed_gain = 0.65;
 
-    % Target-free local hold rule corresponding to the article's optimal-
-    % fitness threshold.  It is evaluated from the noisy local BGF sample.
+    % Target-free hold rule based on the article's noisy local-fitness threshold.
     P.paivc_hold_fitness_threshold = 0.995;
 
-    % Fixed-AIVC control.  These three non-adaptive multipliers are the
-    % pooled time averages of the full method over the independent 72-scenario
-    % development design (base seed 17320508; 850 iterations), frozen before
-    % formal testing.
-    % Revised full-controller development run: 72 scenarios, base seed
-    % 17320508, three seeds per initialization/noise/BGF cell.  Values were
-    % frozen before the validation and final holdout runs.
+    % Fixed-AIVC multipliers are pooled full-method averages from an independent
+    % 72-scenario development design (seed 17320508), frozen before formal testing.
     P.fixed_E_scale = 1.036827816643871;
     P.fixed_C_strength = 0.093505308269833;
     P.fixed_A_blend = 0.150764873190314;
 
-    % Secondary descriptive endpoint.  It is labelled exploratory because
-    % these thresholds were not independently preregistered for this family.
+    % Exploratory secondary endpoint; thresholds were not independently preregistered.
     P.success_terminal_error = 1.5;
     P.success_occupancy = 0.35;
     P.success_late_fraction = 0.20;
@@ -208,7 +175,6 @@ function D = setup_design(run_mode)
             D.output_dir = fullfile(pwd,'diagnostic','autonomous_quick');
             D.output_prefix = 'tsif_aivc_autonomous_quick';
         case {'formal','merge','figures'}
-            % defaults above
         otherwise
             error('Unknown run_mode: %s',run_mode);
     end
@@ -363,7 +329,6 @@ function cfg = mode_spec(mode)
         'external_baseline',false,'method_role','internal_full');
     switch mode
         case 'tsif_aivc'
-            % defaults
         case 'aivc_no_e'
             cfg.use_E = false; cfg.method_role = 'single_path_ablation';
         case 'aivc_no_c'
@@ -453,10 +418,8 @@ function result = run_trial(P,f,bgf_name,initial_positions,R,position_noise,cfg)
         A_gain_hist(sample)=Dg.g_A; paivc_entropy_hist(sample)=state.entropy;
 
         if position_noise>0
-            % P-AIVC Algorithm 1 keeps a nanorobot stopped after it reaches
-            % the optimal-fitness threshold.  The imposed position
-            % perturbation is therefore applied only to robots that have not
-            % entered the persistent held state.
+            % Article-based P-AIVC holds an agent after it reaches the fitness threshold;
+            % position perturbations therefore apply only to agents not yet held.
             perturbation=position_noise*R.position_z(:,:,iteration);
             perturbation(state.held,:)=0;
             nps = nps+perturbation;
@@ -472,8 +435,8 @@ function result = run_trial(P,f,bgf_name,initial_positions,R,position_noise,cfg)
         paivc_entropy_hist,P);
     result.positions_initial = positions_initial;
     result.positions_final = positions_final;
-    % Match the authoritative HIVC analysis window exactly: the process
-    % series contains states at iterations 2,...,T (after updates 1,...,T-1).
+    % Match the HIVC analysis window: recorded states correspond to
+    % iterations 2,...,T after updates 1,...,T-1.
     process_idx=2:P.max_iteration;
     result.error_hist = error_hist(process_idx);
     result.occupancy_hist = occupancy_hist(process_idx);
@@ -492,8 +455,7 @@ function result = run_trial(P,f,bgf_name,initial_positions,R,position_noise,cfg)
 end
 
 function Pctrl = make_control_parameters(P)
-    % Remove every evaluation-only quantity.  This structural separation is
-    % audited so the autonomous controller cannot query the true target.
+    % Remove evaluation-only quantities so control cannot query the true target.
     Pctrl=P;
     remove={'target','target_radius','success_terminal_error', ...
         'success_occupancy','success_late_fraction', ...
@@ -512,17 +474,15 @@ end
 
 function [nps_next,state,Dg] = autonomous_paivc_step(nps,P,f,state,iteration, ...
         sensing_noise,q_noise,cfg)
-    % Target-free article-based P-AIVC update plus optional TSIF gains.
-    % All quantities are computed from positions, neighbor relations, and the
-    % one noisy BGF sample per agent already required by P-AIVC.
+    % Target-free P-AIVC update with optional TSIF gains, using only positions,
+    % neighbors, and the existing noisy BGF sample.
     assert(~isfield(P,'target'),'Autonomous controller received true target.');
     N = size(nps,1);
     nps_next = nps;
     fitness = f(nps); fitness = fitness(:)+sensing_noise(:);
 
-    % A target-free progress gate obtained from the same noisy BGF samples
-    % already used by P-AIVC.  No candidate-position or finite-difference
-    % query is introduced.  The gate approaches one under stagnation.
+    % Target-free stagnation gate from the existing noisy BGF samples; no
+    % candidate-position or finite-difference query is introduced.
     mean_fitness=mean(clamp(fitness,0,1));
     if ~isfinite(state.fitness_ema)
         state.fitness_ema=mean_fitness;
@@ -604,9 +564,8 @@ function [nps_next,state,Dg] = autonomous_paivc_step(nps,P,f,state,iteration, ..
         local_C(i)=sqrt(clamp(compactness,0,1)*relative_evidence(i));
     end
 
-    % The native article-based baseline accepts one high local measurement.
-    % Dynamic TSIF-C additionally requires local support and temporal
-    % confirmation. No target coordinate or extra BGF query is used.
+    % P-AIVC accepts one high local measurement; TSIF-C additionally requires
+    % local support and temporal confirmation.
     if cfg.use_C
         supported_hold=candidate_hold & ...
             relative_evidence>=P.C_hold_rank_threshold & ...
@@ -619,12 +578,9 @@ function [nps_next,state,Dg] = autonomous_paivc_step(nps,P,f,state,iteration, ..
     end
     hold_local=state.held;
 
-    % Spatial occupancy entropy E schedules the native BGF-directed step.
-    % The attainable-range normalization keeps the thresholds meaningful for
-    % finite N. High diversity gives a modest cruise boost. Low diversity
-    % gives an escape boost only when the BGF-derived progress gate indicates
-    % stagnation. Both terms are nonnegative, so E never reverses or suppresses
-    % the native P-AIVC migration direction.
+    % E scales the native BGF-directed step using finite-swarm-normalized entropy.
+    % Its nonnegative cruise and stagnation-escape terms never reverse or suppress
+    % the native migration direction.
     Dg.E=spatial_entropy(nps,P);
     if cfg.use_E
         low_drive=max(P.E_low-Dg.E,0)/max(P.E_low,eps)*Dg.progress_gate;
@@ -637,10 +593,8 @@ function [nps_next,state,Dg] = autonomous_paivc_step(nps,P,f,state,iteration, ..
         Dg.g_E=1;
     end
 
-    % Target-free consensus C_auto and social-stabilization strengths.
-    % Relative rank makes the high-evidence gate comparable across landscapes.
-    % Compact, high-ranked agents retain less non-directed social displacement,
-    % especially during stalled motion; directed migration is not reduced.
+    % C uses local compactness and relative BGF rank to reduce non-directed social
+    % displacement for compact, high-evidence agents without reducing migration.
     Dg.C_auto=mean(local_C);
     if cfg.use_C
         rank_gate=clamp((relative_evidence-P.C_rank_threshold)/ ...
@@ -658,9 +612,8 @@ function [nps_next,state,Dg] = autonomous_paivc_step(nps,P,f,state,iteration, ..
     end
     Dg.mean_g_C=mean(C_strength);
 
-    % Global descriptor plus local, norm-preserving A pathway.  Global
-    % cancellation remains visible in A_auto, but control uses neighborhood
-    % coherence so opposing regions in a multimodal field are not all slowed.
+    % A_auto retains global cancellation, while control uses neighborhood coherence
+    % to avoid coupling opposing regions in multimodal fields.
     c_norm=vecnorm(cooperation_all,2,2);
     valid=c_norm>P.vector_valid_threshold;
     Dg.rho_A=mean(valid); Dg.A_dir=0; Dg.A_auto=0;
@@ -706,11 +659,8 @@ function [nps_next,state,Dg] = autonomous_paivc_step(nps,P,f,state,iteration, ..
         Dg.A_local=0; Dg.direction_reliability=0; Dg.g_A=0;
     end
 
-    % Consensus rescue for isolated or low-evidence agents. The external AIVC
-    % layer forms the centroid of the currently best locally measured agents.
-    % Under stagnation, poorly ranked agents blend toward that centroid. This
-    % prevents the local P-AIVC neighborhood rule from permanently stranding a
-    % small number of agents, without using the true target position.
+    % During stagnation, low-evidence agents blend toward the centroid of the
+    % best locally measured agents, preventing isolation without target coordinates.
     if cfg.use_C
         elite=relative_evidence>=P.C_rescue_elite_rank;
         if any(elite) && max(fitness(elite))>=P.C_rescue_fitness_threshold
@@ -736,9 +686,8 @@ function [nps_next,state,Dg] = autonomous_paivc_step(nps,P,f,state,iteration, ..
         end
     end
 
-    % A increases speed only when the locally aggregated direction is reliable.
-    % Fixed-AIVC uses the corresponding frozen scalar and therefore receives no
-    % state-dependent reliability advantage.
+    % A increases speed only with reliable neighborhood direction; Fixed-AIVC
+    % uses the corresponding frozen scalar.
     A_speed_scale=ones(N,1);
     if cfg.use_A
         A_speed_scale=1+P.A_speed_gain*A_blend.*local_alignment;
@@ -746,8 +695,7 @@ function [nps_next,state,Dg] = autonomous_paivc_step(nps,P,f,state,iteration, ..
         A_speed_scale=(1+P.A_speed_gain*P.fixed_A_blend)*ones(N,1);
     end
 
-    % C brakes directed motion only for compact, high-evidence agents. This
-    % reduces near-optimum overshoot while leaving dispersed agents unchanged.
+    % C brakes compact, high-evidence agents to reduce near-optimum overshoot.
     C_migration_scale=1-P.C_migration_brake*C_strength;
 
     for i=1:N
@@ -773,8 +721,8 @@ function entropy_value = paivc_information_entropy(fitness,num_bins)
 end
 
 function ranks = fractional_rank01(values)
-    % Deterministic empirical ranks in [0,1], requiring no toolbox.  Ties are
-    % assigned their shared midrank so a flat field yields neutral evidence.
+    % Deterministic empirical ranks use shared midranks, so a flat field gives
+    % neutral evidence without requiring a toolbox.
     values=values(:); n=numel(values); ranks=zeros(n,1);
     if n<=1, ranks(:)=0.5; return; end
     [sorted_values,order]=sort(values);
@@ -802,8 +750,7 @@ function E = spatial_entropy(nps,P)
         idx = (by(valid)-1)*B+bx(valid);
         counts = accumarray(idx(:),1,[B^2 1]);
         p = counts/sum(counts); p=p(p>0);
-        % Normalize by the finite-swarm attainable maximum rather than by the
-        % number of grid cells when N<B^2.
+        % Normalize by the finite-swarm attainable maximum when N<B^2.
         E = -sum(p.*log(p))/log(min(P.N,B^2));
     else
         E = 0;
@@ -1036,8 +983,7 @@ function export_method_switch_table(D)
     end
     T=vertcat(rows{:});
 
-    % Programmatic clean-ablation audit: each ablation differs from full in
-    % exactly its named TSIF switch; all other structural switches agree.
+    % Verify that each ablation changes exactly its named TSIF switch.
     full=mode_spec('tsif_aivc');
     assert_clean_ablation(full,mode_spec('aivc_no_e'),'use_E');
     assert_clean_ablation(full,mode_spec('aivc_no_c'),'use_C');
@@ -1151,7 +1097,7 @@ function S = build_performance_summary(F,D)
 end
 
 function S = build_factorial_summary(F,D)
-    % Complete 4 x 6 x 3 x 2 table; each formal cell contains 30 runs.
+    % Complete 4 x 6 x 3 x 2 design; formal cells contain 30 runs.
     F=normalize_text_columns(F);
     rows=cell(numel(D.bgfs)*numel(D.methods)*numel(D.inits)* ...
         numel(D.position_noise_levels),1); q=0;
@@ -1318,7 +1264,6 @@ function generate_figures(F,Stats,D)
             low(b,m)=X.ci_relative_low; high(b,m)=X.ci_relative_high;
         end
     end
-    % Keep the diagnostic plot in the same wide publication style.
     fig=paper_figure(S);
     short_labels=cellfun(@paper_plot_label,cellstr(comps),'UniformOutput',false);
     plot_low=floor(min(low(:))-0.5); plot_high=ceil(max(high(:))+0.5);
@@ -1356,8 +1301,6 @@ function generate_figures(F,Stats,D)
 end
 
 function S=paper_figure_style()
-    % Shared with main_stf_ablation_ECA.m.  The values reproduce the
-    % wide, compact grouped-bar style used by the reference convergence plot.
     S=struct('font_name','Times New Roman','font_size',9, ...
         'panel_font_size',8,'title_size',11,'label_size',10, ...
         'fig_width',7.0,'fig_height',3.5,'bar_width',0.72, ...
@@ -1441,8 +1384,7 @@ function label = paper_mode_label(mode)
 end
 
 function label = paper_plot_label(mode)
-    % Short legend labels match the original TSIF-HIVC figures.  This helper
-    % is used only for plotting; exported tables retain the full method names.
+    % Plotting labels are shortened; exported tables retain full method names.
     mode=char(mode);
     switch mode
         case 'tsif_aivc', label='TSIF-AIVC';
@@ -1523,9 +1465,8 @@ function [F,all_results,P_run,D_run] = merge_shards(D)
     end
     F=sortrows(F,{'scenario_id','control_mode'});
 
-    % Keep the trajectory cell array in exactly the same order as the
-    % de-duplicated feature rows.  A mismatched raw trajectory is more
-    % dangerous than a missing one because it silently corrupts provenance.
+    % Keep trajectories aligned with de-duplicated feature rows to preserve
+    % provenance.
     if ~isempty(all_results)
         result_keys=strings(numel(all_results),1);
         for k=1:numel(all_results)
@@ -1557,4 +1498,3 @@ function Dclean=strip_shard_runtime_fields(Din)
     names=names(isfield(Dclean,names));
     if ~isempty(names), Dclean=rmfield(Dclean,names); end
 end
-
