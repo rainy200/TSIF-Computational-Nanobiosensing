@@ -11,7 +11,7 @@ The repository accompanies the manuscript:
 
 | File | Purpose |
 |---|---|
-| `code/main_stf_ablation_ECA.m` | Main TSIF-HIVC factorial experiment, component ablations, paired inference, tables, and figures. |
+| `code/main_stif_ablation_ECA.m` | Main TSIF-HIVC factorial experiment, component ablations, paired inference, tables, and figures. |
 | `code/main_tsif_aivc_revised.m` | Target-free TSIF-AIVC experiment using a common P-AIVC local layer; includes TSIF-AIVC, `w/o E`, `w/o C`, `w/o A`, Fixed-AIVC, and published P-AIVC comparisons. |
 
 Both files are self-contained MATLAB functions with their helper functions included at the end of the same file.
@@ -32,7 +32,7 @@ From the repository root:
 addpath('code');
 
 % TSIF-HIVC reduced check
-main_stf_ablation_ECA('quick');
+main_stif_ablation_ECA('quick');
 
 % TSIF-AIVC branch and output check
 main_tsif_aivc_revised('smoke');
@@ -44,7 +44,7 @@ The quick modes are intended to verify execution and output structure. Their res
 
 ```matlab
 addpath('code');
-main_stf_ablation_ECA('formal');
+main_stif_ablation_ECA('formal');
 ```
 
 The default base seed is `20250425`. Each scenario reuses its initialization and stochastic realization across all compared methods, enabling matched comparisons. Environment-variable overrides in this program are intended for explicit sensitivity or sharded runs and should be recorded when used.
