@@ -5,8 +5,8 @@ function main_stf_ablation_ECA(run_mode)
         run_mode = '';
     end
 
-    %% ---- Setup ----
-    
+    %% Setup
+
     experiment_profile = strtrim(lower(getenv('TSIF_EXPERIMENT_PROFILE')));
     if isempty(experiment_profile), experiment_profile = 'paper'; end
     if contains(lower(run_mode), 'stress_controller_v2_1_confirmatory')
@@ -39,8 +39,7 @@ function main_stf_ablation_ECA(run_mode)
         exp_cfg.do_visualize_bgf = false;
     end
 
-    % Optional method filter for process-level recovery or targeted reruns.
-    % Example: setenv('TSIF_CONTROL_MODES','no_c') or a comma-separated list.
+    % Optional comma-separated method filter for targeted reruns.
     env_modes = strtrim(getenv('TSIF_CONTROL_MODES'));
     if ~isempty(env_modes)
         requested_modes = strtrim(strsplit(lower(env_modes), ','));
@@ -52,8 +51,7 @@ function main_stf_ablation_ECA(run_mode)
         exp_cfg.control_mode_list = requested_modes;
     end
 
-    % Optional condition filters are intended for independent development
-    % checks of reconstruction choices.  Formal runs leave them unset.
+    % Optional condition filters; formal runs leave them unset.
     env_bgfs = strtrim(getenv('TSIF_BGF_TYPES'));
     if ~isempty(env_bgfs)
         requested_bgfs = strtrim(strsplit(lower(env_bgfs), ','));
@@ -108,7 +106,7 @@ function main_stf_ablation_ECA(run_mode)
     fprintf('===== TSIF Ablation Experiment  [%s | profile=%s] =====\n', ...
         exp_cfg.experiment_mode, params.experiment_profile);
 
-    %% ---- Optional: redraw figures from saved results only ----
+    %% Optional: redraw figures from saved results only
     if exp_cfg.regenerate_figures_only
         fprintf('*** FIGURE-ONLY MODE: loading saved result files ***\n');
         feature_table = readtable([out_prefix '_feature.csv']);
@@ -128,7 +126,7 @@ function main_stf_ablation_ECA(run_mode)
         return;
     end
 
-    %% ---- Stage 1: optional metric validation ----
+    %% Stage 1: optional metric validation
     if strcmpi(exp_cfg.experiment_mode, 'metric_validation')
         metric_table = run_metric_validation(params, exp_cfg.bgf_type_list, out_prefix);
         writetable(metric_table, [out_prefix '_metric_validation.csv']);
@@ -136,7 +134,7 @@ function main_stf_ablation_ECA(run_mode)
         return;
     end
 
-    %% ---- BGF landscape preview ----
+    %% BGF landscape preview
     if exp_cfg.do_visualize_bgf
         try
             plot_all_bgfs(out_prefix);
@@ -145,10 +143,10 @@ function main_stf_ablation_ECA(run_mode)
         end
     end
 
-    %% ---- Stage 2: main experiment sweep ----
+    %% Stage 2: main experiment sweep
     [feature_table, summary_table, all_results] = run_experiment_sweep(params, exp_cfg, out_prefix);
 
-    %% ---- Optional raw-only shard output ----
+    %% Optional raw-only shard output
     if raw_only
         save([out_prefix '_results.mat'], ...
             'feature_table', 'summary_table', 'all_results', '-v7.3');
@@ -158,19 +156,16 @@ function main_stf_ablation_ECA(run_mode)
         return;
     end
 
-    %% ---- Stage 3: statistical analysis + save ----
+    %% Stage 3: statistical analysis + save
     analyze_results(feature_table, summary_table, all_results, out_prefix, params);
 
-    %% ---- Stage 4: generate figures ----
+    %% Stage 4: generate figures
     generate_figures(feature_table, summary_table, all_results, out_prefix);
 
     fprintf('\n===== Done =====\n');
 end
 
-
-%% =========================================================================
-%  SUBFUNCTION 1 -- setup_params
-% =========================================================================
+%% SUBFUNCTION 1 -- setup_params
 
 function params = setup_params(experiment_profile)
     if nargin < 1 || isempty(experiment_profile), experiment_profile = 'paper'; end
@@ -232,31 +227,28 @@ function params = setup_params(experiment_profile)
     params.dc_interval            = 60;
     params.dc_far_threshold       = 2.4;
 
-    % base physical protection radius; all modes use this as the minimum
+    % Minimum protection radius applied to every method.
     params.dc_protect_radius      = 0.95 * params.tumor_radius;
 
-    % C-gate adds an extra near-target protection shell.
-    % This is the main mechanism that makes no_C visibly worse near convergence.
+    % Additional protection shell controlled by the C pathway.
     params.C_near_target_freeze_radius = 1.35 * params.tumor_radius;
     params.C_gate_start_occupancy      = 0.22;
 
-    % More aggressive consensus stopping, so full TSIF avoids late over-actuation.
+    % Consensus threshold for suppressing late-stage DC actuation.
     params.dc_consensus_threshold      = 0.72;
 
-    % Reliability threshold for deciding whether DC should be trusted.
     params.dc_reliability_threshold    = 0.45;
     params.C_reliability_weight        = 0.70;
 
     % ---- DC direction uncertainty ----
-    % Increase direction uncertainty so A-bias has a visible role.
     params.dc_direction_noise          = 0.45;  % radians
     params.dc_direction_noise_complex  = 1.10;  % radians for Ackley/Rastrigin
-    
+
     params.dc_systematic_bias_std         = 0.28;
     params.dc_systematic_bias_std_complex = 0.55;
 
     params.dc_unreliable_noise_gain = 1.40;
-    
+
     % ---- TSIF E-adapt: information-entropy-based exploration regulation ----
     params.E_thr        = 0.40;
     params.q_scale      = 1.20;
@@ -272,7 +264,6 @@ function params = setup_params(experiment_profile)
     params.spstep_smooth     = 0.80;
 
     % ---- TSIF A-bias: gradient-direction mixing ----
-    % Stronger correction makes no_G ablation more visible under noisy DC direction.
     params.grad_mix_ratio       = 2.20;
     params.grad_mix_min         = 0.25;
     params.grad_mix_max         = 0.95;
@@ -284,8 +275,7 @@ function params = setup_params(experiment_profile)
     % ---- TSIF C-gate: consensus/occupancy gate on DC ----
     params.C_soft_gain = 0.65;
     params.C_min_scale = 0.20;
-    % C-controller v2.1 parameters. They are active only in the versioned
-    % development profile and its prospectively frozen confirmatory profile.
+    % Versioned C-controller parameters for the development and holdout profiles.
     params.C_v2_enabled              = false;
     params.C_hold_radius             = 0.60 * params.tumor_radius;
     params.C_retention_on            = 0.50;
@@ -303,24 +293,19 @@ function params = setup_params(experiment_profile)
     params.target_hydpr_ratio = 0.20;
 
     % ---- Explicit stress-test profile ----
-    % This profile is a deliberately harder, separately labelled mechanism
-    % experiment.  It must not be presented as the original paper condition.
+    % Separately labeled stress-test profile; not an original-paper condition.
     if any(strcmpi(params.experiment_profile, ...
             {'stress','stress_revised','stress_revised_v2', ...
              'stress_controller_v2_1_dev','stress_controller_v2_1_confirmatory'}))
         params.max_iteration = 850;
         params.spstep        = 0.024;
 
-        % Both profiles use one method-independent endpoint. The original
-        % stress profile is kept byte-for-byte reproducible. The revised
-        % profiles are separately labelled, data-informed sensitivity
-        % endpoints and must not be called frozen confirmatory evidence.
+        % The stress profiles share one method-independent endpoint; revised
+        % endpoints are data-informed sensitivity analyses.
         if any(strcmpi(params.experiment_profile, ...
                 {'stress_revised_v2','stress_controller_v2_1_dev', ...
                  'stress_controller_v2_1_confirmatory'}))
-            % One global, method-independent envelope. It was developed on
-            % archived data and is frozen prospectively for the confirmatory
-            % profile before its holdout random seed is generated.
+            % Method-independent envelope frozen before the holdout seed was generated.
             params.success_threshold_occupancy = 0.30;
             params.success_max_late_occupancy_std = 0.07;
             params.success_max_late_error_std     = 0.075;
@@ -340,13 +325,9 @@ function params = setup_params(experiment_profile)
         params.success_min_run_ratio        = 0.75;
         params.success_rule                 = 'stability_envelope';
 
-        % All methods face the same faster, noisier DC environment.
         params.dc_interval = 35;
         params.v_e = 0.10;
-        % A very small common base protection region makes the difference
-        % between fixed actuation and C-gated late-stage braking observable.
-        % This is common to every method; only the C pathway adds the larger
-        % adaptive protection shell.
+        % Common base protection region; only C-enabled modes add the adaptive shell.
         params.dc_protect_radius = 0.10 * params.tumor_radius;
         params.C_near_target_freeze_radius = 1.50 * params.tumor_radius;
         params.C_gate_start_occupancy      = 0.18;
@@ -361,15 +342,13 @@ function params = setup_params(experiment_profile)
         params.stress_late_dc_noise_gain = 2.00;
         params.stress_late_actuator_noise = 2.00;
 
-        % Common recovery challenge: late in the run, displace the same
-        % deterministic subset of particles radially away from the target.
-        % No method-specific perturbation is used.
+        % Common recovery challenge applied to the same deterministic particle subset
+        % in every paired method.
         params.stress_shock_time_fraction = 0.68;
         params.stress_shock_particle_fraction = 0.50;
         params.stress_shock_magnitude = 2.00;
 
-        % Make entropy adaptation and gradient correction operationally
-        % relevant under the common stressor.
+        % Common stressor activates the entropy and alignment feedback paths.
         params.E_thr        = 0.52;
         params.q_scale      = 1.60;
         params.DT_scale     = 0.30;
@@ -382,9 +361,7 @@ function params = setup_params(experiment_profile)
         params.grad_mix_max   = 0.95;
         if any(strcmpi(params.experiment_profile, ...
                 {'stress_controller_v2_1_dev','stress_controller_v2_1_confirmatory'}))
-            % Versioned controller: keep the revised-v2 endpoint and common
-            % stressor, but replace the legacy hard C-freeze with a
-            % retention-state safety filter and damping.
+            % Revised controller uses a retention-state safety filter and damping.
             params.C_v2_enabled = true;
         end
     elseif ~strcmpi(params.experiment_profile, 'paper')
@@ -397,10 +374,7 @@ function params = setup_params(experiment_profile)
     params.control_mode = 'tsif_full';
 end
 
-
-%% =========================================================================
-%  SUBFUNCTION 2 -- setup_experiment_config
-% =========================================================================
+%% SUBFUNCTION 2 -- setup_experiment_config
 
 function exp_cfg = setup_experiment_config()
     exp_cfg = struct();
@@ -410,9 +384,8 @@ function exp_cfg = setup_experiment_config()
     exp_cfg.regenerate_figures_only = false;       % set true to redraw figures from saved CSV/MAT
     exp_cfg.do_visualize_bgf = true;
     exp_cfg.base_seed        = 20250425;
-    % Keep simulations serial inside each MATLAB process so rng(seed,'twister')
-    % exactly matches the manuscript run definition. Use process-level shards
-    % (TSIF_SHARD_INDEX/TSIF_SHARD_COUNT) for parallel throughput.
+    % Serial execution preserves rng(seed,'twister'); use process-level shards
+    % for parallel throughput.
     exp_cfg.use_parallel     = false;
     exp_cfg.num_workers      = 8;
 
@@ -436,7 +409,7 @@ function exp_cfg = setup_experiment_config()
             exp_cfg.control_mode_list           = {'tsif_full'};
             exp_cfg.neighbor_list               = 15;
             exp_cfg.ve_list                     = 0.08;
-            exp_cfg.noise_level_list            = [0.00, 0.015];  % 增加轻微位置噪声
+            exp_cfg.noise_level_list            = [0.00, 0.015];
             exp_cfg.init_list                   = {'corner_small'};
             exp_cfg.num_simulations_per_setting = 30;
 
@@ -460,10 +433,7 @@ function exp_cfg = setup_experiment_config()
     end
 end
 
-
-%% =========================================================================
-%  SUBFUNCTION 3 -- run_experiment_sweep
-% =========================================================================
+%% SUBFUNCTION 3 -- run_experiment_sweep
 
 function [feature_table, summary_table, all_results] = run_experiment_sweep(params, exp_cfg, out_prefix)
 
@@ -585,8 +555,7 @@ function [feature_table, summary_table, all_results] = run_experiment_sweep(para
                                 result = result_cells{sim};
                                 scenario_id = feat_tbl.scenario_id(1);
 
-                                % Append-only per-run journal. This is the primary raw
-                                % record and survives interruption before the final MAT save.
+                                % Append-only per-run journal for interruption recovery.
                                 journal_file = [out_prefix '_run_journal.csv'];
                                 if isfile(journal_file)
                                     writetable(feat_tbl, journal_file, 'WriteMode', 'append', ...
@@ -635,14 +604,10 @@ function params = apply_init_bounds(params, init_name)
     end
 end
 
-
-%% =========================================================================
-%  SUBFUNCTION 4 -- analyze_results
-% =========================================================================
+%% SUBFUNCTION 4 -- analyze_results
 
 function analyze_results(feature_table, summary_table, all_results, out_prefix, params)
     fprintf('\n===== Analyzing results =====\n');
-    % Late stage negative DC rate
     grpstats(feature_table, {'bgf_type','control_mode'}, 'mean', ...
     'DataVars', {'negative_dc_gain_rate','low_reliability_dc_rate','late_error_std'});
     save([out_prefix '_results.mat'], ...
@@ -672,10 +637,7 @@ function analyze_results(feature_table, summary_table, all_results, out_prefix, 
     end
 end
 
-
-%% =========================================================================
-%  SIMULATION CORE
-% =========================================================================
+%% SIMULATION CORE
 
 function result = run_single_simulation(params, f, bgf_type, init_nps)
     hydsf = @(r,q,rd) q./(r.^3).*(r>rd) + q./(rd.^3).*(r<=rd);
@@ -736,10 +698,8 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
             round(params.max_iteration * params.stress_shock_time_fraction)));
         n_shock = max(1, min(params.N, ...
             round(params.N * params.stress_shock_particle_fraction)));
-        % Bind the stress realization to the prospectively generated base
-        % seed as well as the scenario ID. This retains common random shocks
-        % across all paired methods while preventing reuse of the
-        % development batch's shock realization in an independent holdout.
+        % Include the base seed in the stress realization while sharing each
+        % realization across paired methods.
         shock_seed = mod(7919 + round(params.base_seed) + ...
             round(params.scenario_id), 2^31-1);
         shock_stream = RandStream('mt19937ar', 'Seed', shock_seed);
@@ -828,12 +788,10 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
             dc_count        = dc_count + 1;
             before_dc_error = current_error_mean;
 
-            % 先计算 d2target_dc（供后续所有判断使用）
             d2target_dc = vecnorm(nps - params.target, 2, 2);
             near_phase = current_occupancy >= params.C_gate_start_occupancy || ...
                          mean(d2target_dc) < 3 * params.tumor_radius;
 
-            % Base DC actuation region
             if cfg.no_consensus_all_particles && near_phase && ...
                     current_occupancy >= cfg.no_consensus_all_particles_min_occupancy
                 mask = true(size(d2target_dc));
@@ -842,14 +800,11 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
             end
             do_dc = any(mask);
 
-            % Reliability combines target consensus and target-aligned gradient.
-            % In no-A ablation, use C as a proxy for reliability; this keeps
-            % the DC layer active while leaving it unable to detect
-            % terrain-inconsistent transport directions.
+            % Reliability combines target consensus and target-aligned gradient information.
+            % The no-A mode uses C alone, keeping DC active without directional reliability.
             if cfg.use_A_reliability
-                % Preserve the published controller behavior: its reliability
-                % proxy used directional coherence.  The revised descriptor
-                % A=rho_A*A_dir is exported separately for interpretation.
+                % Preserve the published directional-coherence reliability proxy; export
+                % A=rho_A*A_dir separately for interpretation.
                 g_reliability = metrics.A_control;
                 transport_reliability = metrics.A_control;
             elseif cfg.no_gradient_consensus_reliability
@@ -886,7 +841,6 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
                 guide_dir = to_target / norm(to_target);
             end
 
-            % Direction uncertainty model
             if norm(guide_dir) > 1e-9
                 noise_angle = params.dc_direction_noise;
                 if strcmpi(bgf_type,'ackley') || strcmpi(bgf_type,'rastrigin')
@@ -909,8 +863,7 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
                 guide_dir = rotate_unit_vector(guide_dir, dc_bias_angle + noise_angle * randn());
             end
 
-            % Without A-bias, DC transport cannot correct terrain-induced
-            % directional drift. Model that as a blind oblique component.
+            % Without A-bias, DC cannot correct terrain-induced directional drift.
             if cfg.no_gradient_blind_transport && norm(guide_dir) > 1e-9
                 blind_gain = 1.0;
                 if strcmpi(bgf_type,'ackley') || strcmpi(bgf_type,'rastrigin')
@@ -936,7 +889,6 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
                 end
             end
 
-            % A-bias: gradient-guided correction
             if cfg.use_A_bias && norm(guide_dir) > 1e-9
                 grad_info = estimate_swarm_gradient_reliable(nps, f);
                 g_swarm   = grad_info.g_swarm;
@@ -965,8 +917,7 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
                     end
                 end
             end
-            % A-bias 后增加对齐增强
-            % Extra alignment boost after A-bias correction.
+            % Additional alignment correction after A-bias.
             if cfg.use_A_bias && norm(guide_dir) > 1e-9 && exist('g_swarm','var') && ...
                     norm(g_swarm) > params.grad_norm_min
                 align_after = dot(g_swarm, guide_dir);
@@ -975,12 +926,11 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
                     guide_dir = guide_dir / norm(guide_dir);
                 end
             end
-            % C-gate: legacy controller or development-only v2 controller.
+            % Consensus gate: legacy or versioned controller.
             c_scale = 1.0;
             if cfg.use_C_gate && params.C_v2_enabled
-                % Hysteretic retention state. It cannot activate before the
-                % run reaches the T50 occupancy level, preventing the C
-                % pathway from slowing the prespecified first-passage time.
+                % Retention cannot activate before T50, so it does not alter the
+                % prespecified first-passage time.
                 if retention_active
                     if current_occupancy <= params.C_retention_off
                         retention_active = false;
@@ -991,8 +941,7 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
                 end
 
                 if retention_active
-                    % Protect only particles already well inside the target;
-                    % particles outside R_T remain eligible for correction.
+                    % Protect target-interior particles while keeping exterior particles eligible.
                     mask = d2target_dc > params.C_hold_radius;
                     do_dc = any(mask);
                     rel_scale = (dc_reliability - params.C_v2_reliability_low) / ...
@@ -1032,9 +981,8 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
                     step_len = step_len * cfg.near_target_step_scale;
                 end
 
-                % One-step command safety filter. The filter uses the
-                % intended command, not the subsequently realized actuator
-                % noise. It therefore does not peek at random future noise.
+                % The command safety filter uses the intended command before actuator
+                % noise and therefore does not inspect future random outcomes.
                 if params.C_v2_enabled && cfg.use_C_gate && retention_active
                     move_ids = find(mask);
                     remaining = max(d2target_dc(move_ids) - params.C_hold_radius, 0);
@@ -1049,9 +997,7 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
             end
 
             if do_dc && norm(guide_dir) > 1e-9
-                % Common post-controller actuator uncertainty. Because this
-                % occurs after A-based direction correction, the C pathway's
-                % late-stage suppression/protection is the relevant defense.
+                % Common actuator uncertainty is applied after direction correction.
                 actuation_dir = guide_dir;
                 if near_phase && params.stress_late_actuator_noise > 0
                     actuation_dir = rotate_unit_vector(actuation_dir, ...
@@ -1098,8 +1044,6 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
             end
         end
 
-           
-
         % ---- Local motion layer ----
         nps_prev = nps;
 
@@ -1127,9 +1071,8 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
         nps(:,1) = min(max(nps(:,1), params.global_boundary(1)), params.global_boundary(2));
         nps(:,2) = min(max(nps(:,2), params.global_boundary(3)), params.global_boundary(4));
 
-        % C-dependent local-motion damping acts only on particles already
-        % inside the target during the retention state. It reduces late
-        % oscillation without freezing particles that have not yet arrived.
+        % During retention, C-dependent damping applies only to target-interior
+        % particles and does not freeze particles that have not arrived.
         if params.C_v2_enabled && cfg.use_C_gate && retention_active
             inside_before_local = vecnorm(nps_prev - params.target, 2, 2) ...
                 <= params.tumor_radius;
@@ -1137,10 +1080,8 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
                 1 - params.C_local_damping_gain * metrics.C);
             nps(inside_before_local,:) = nps_prev(inside_before_local,:) + ...
                 local_damping * (nps(inside_before_local,:) - nps_prev(inside_before_local,:));
-            % Mild C-weighted recentering counters the v2.0 tendency to
-            % retain particles near the target boundary. It acts only after
-            % T50 and only on particles already inside the operational
-            % target, so it cannot improve first-passage time by definition.
+            % C-weighted recentering starts after T50 and acts only inside the target,
+            % so it cannot improve first-passage time by definition.
             recenter_gain = params.C_local_recentering_gain * metrics.C;
             nps(inside_before_local,:) = nps(inside_before_local,:) + ...
                 recenter_gain * (params.target - nps(inside_before_local,:));
@@ -1151,7 +1092,6 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
         iteration = iteration + 1;
     end
 
-    % ---- Collect results ----
     d2target  = vecnorm(nps - params.target, 2, 2);
     final_fit = f(nps);
 
@@ -1303,7 +1243,6 @@ function result = run_single_simulation(params, f, bgf_type, init_nps)
     result.early_cohesion_mean = mean(cohesion_hist(early_win), 'omitnan');
 end
 
-
 function cfg = mode_switches(control_mode, experiment_profile)
     if nargin < 2 || isempty(experiment_profile), experiment_profile = 'paper'; end
     cfg = struct('use_dc',true, 'use_spp',true, 'use_hydpr',true, ...
@@ -1333,20 +1272,17 @@ function cfg = mode_switches(control_mode, experiment_profile)
              'no_gradient_persistent_drift',false);
     switch lower(control_mode)
         case 'tsif_full'
-            % Full TSIF: E-adapt + C-gate + A-bias.
+            % Full TSIF: E adaptation, C gating, and A correction.
 
         case 'no_e'
-            % Remove entropy-based adaptive exploration.
+            % Entropy pathway disabled.
             cfg.use_E_adapt = false;
 
         case 'no_c'
-            % Remove consensus/reliability gate.
-            % DC is still active, but unreliable near-target interventions
-            % are no longer suppressed.
+            % Consensus/reliability pathway disabled.
             cfg.use_C_gate = false;
             if strcmpi(experiment_profile, 'paper')
-                % Legacy paper-calibration behavior retained for exact
-                % reproducibility of the existing raw record.
+                % Legacy calibration retained for reproducibility.
                 cfg.protect_radius_scale = 0.18;
                 cfg.dc_step_scale        = 1.45;
                 cfg.dc_interval_scale    = 0.65;
@@ -1362,8 +1298,7 @@ function cfg = mode_switches(control_mode, experiment_profile)
             end
 
         case 'no_a'
-            % Remove all A-based control information:
-            % no gradient-direction correction and no A-based reliability.
+            % Alignment correction and A-based reliability disabled.
             cfg.use_A_bias            = false;
             cfg.use_A_reliability     = false;
             cfg.no_gradient_consensus_reliability = true;
@@ -1393,8 +1328,7 @@ function cfg = mode_switches(control_mode, experiment_profile)
             end
 
         case 'local_only'
-            % No external DC layer.
-            % Keeps only SPP local motion + hydrodynamic repulsion.
+            % Local motion and hydrodynamic repulsion only.
             cfg.use_dc      = false;
             cfg.use_E_adapt = false;
             cfg.use_C_gate  = false;
@@ -1405,17 +1339,12 @@ function cfg = mode_switches(control_mode, experiment_profile)
     end
 end
 
-
-
-%% =========================================================================
-%  LOCAL MOTION HELPERS
-% =========================================================================
+%% LOCAL MOTION HELPERS
 
 function nps_sp = spp_update(nps, params, f)
     nps_sp = zeros(params.N, 2);
-    % f is deterministic within an iteration.  Evaluate it once for the
-    % whole swarm instead of recomputing the same two values for every pair.
-    % This preserves the SPP equation and random-number stream.
+    % Evaluate the deterministic field once per iteration to preserve both
+    % the SPP equation and random-number stream.
     fitness = f(nps);
     fitness = fitness(:);
 
@@ -1487,10 +1416,7 @@ function val = eval_f(f, pos)
     val = f(pos);
 end
 
-
-%% =========================================================================
-%  TSIF METRICS
-% =========================================================================
+%% TSIF METRICS
 
 function metrics = compute_stf_metrics(nps, nps_prev, f, params) %#ok<INUSL>
     metrics = struct('E',0,'C',0,'A',0,'rho_A',0,'A_dir',0,'A_control',0, ...
@@ -1539,10 +1465,8 @@ function metrics = compute_stf_metrics(nps, nps_prev, f, params) %#ok<INUSL>
         warning(ME.identifier, '%s', ME.message);
     end
 
-    % A(t)=rho_A(t)*A_dir(t): valid-gradient availability multiplied by
-    % directional coherence.  A_control keeps the historical A_dir-based
-    % controller behavior so this analysis-only revision does not change the
-    % simulated policy or invalidate existing performance trajectories.
+    % A=rho_A*A_dir combines valid-gradient availability and directional coherence.
+    % A_control retains the historical A_dir-based policy for trajectory compatibility.
     try
         grad_info = estimate_swarm_gradient_reliable( ...
             nps, f, params.gradient_fd_step, params.gradient_threshold);
@@ -1648,7 +1572,6 @@ function v = rotate_unit_vector(v, theta)
 end
 
 function n = longest_true_run(flag)
-    % Length of the longest uninterrupted true segment in a logical vector.
     x = [false; logical(flag(:)); false];
     dx = diff(x);
     run_start = find(dx == 1);
@@ -1660,10 +1583,7 @@ function n = longest_true_run(flag)
     end
 end
 
-
-%% =========================================================================
-%  FEATURE EXTRACTION AND SUMMARISATION
-% =========================================================================
+%% FEATURE EXTRACTION AND SUMMARISATION
 
 function feat = extract_stage_features(result, sim_id, params, bgf_type, exp_id)
     feat = struct();
@@ -1776,10 +1696,7 @@ function summary_row = summarize_experiment(exp_rows, bgf_type, params, exp_id)
                                            exp_rows.success_stable & exp_rows.success_fast);
 end
 
-
-%% =========================================================================
-%  PAIRED SIGNIFICANCE TESTS
-% =========================================================================
+%% PAIRED SIGNIFICANCE TESTS
 
 function stats_table = run_paired_comparison_tests(feature_table)
     fprintf('\n===== Paired comparison tests =====\n');
@@ -1866,9 +1783,8 @@ function stats_table = run_paired_comparison_tests(feature_table)
     end
 
     if ~isempty(stats_table)
-        % Adjust each prespecified metric family separately.  In particular,
-        % the manuscript's primary family is exactly the 4 BGF x 5 comparator
-        % AUC contrasts (20 p-values), not every diagnostic metric combined.
+        % Adjust each prespecified metric family separately; the primary family
+        % contains the 4 BGF x 5 comparator AUC contrasts.
         stats_table.p_fdr = NaN(height(stats_table),1);
         metric_families = unique(stats_table.metric, 'stable');
         for q = 1:numel(metric_families)
@@ -1928,10 +1844,7 @@ function p_adj = benjamini_hochberg(p)
     p_adj(valid) = tmp;
 end
 
-
-%% =========================================================================
-%  NO-NEW-SIMULATION REVIEW EXPORTS
-% =========================================================================
+%% NO-NEW-SIMULATION REVIEW EXPORTS
 
 function generate_no_new_simulation_exports(feature_table, all_results, stats_table, params, out_prefix)
     fprintf('\n=== Generating review-analysis interfaces ===\n');
@@ -2043,8 +1956,8 @@ function T = build_descriptor_summary(feature_table, all_results)
         r = all_results{i};
         E = get_result_history(r, 'E_hist');
         C = get_result_history(r, 'C_hist');
-        % Only use the revised descriptor history.  Legacy MAT files contain
-        % A_dir under A_hist and must not be silently relabeled as A=rho*A_dir.
+        % Legacy MAT files store A_dir in A_hist and must not be relabeled as
+        % the revised A=rho_A*A_dir descriptor.
         A = get_result_history(r, 'A_hist');
         rho = get_result_history(r, 'rho_A_hist');
         Adir = get_result_history(r, 'A_dir_hist');
@@ -2234,10 +2147,7 @@ function hex = sha256_file(filename)
     end
 end
 
-
-%% =========================================================================
-%  PAPER TABLE GENERATION
-% =========================================================================
+%% PAPER TABLE GENERATION
 
 function generate_paper_tables(feature_table, stats_table, out_prefix)
     fprintf('\n=== Generating paper tables ===\n');
@@ -2258,7 +2168,6 @@ function generate_paper_tables(feature_table, stats_table, out_prefix)
     end
     writetable(auc_table, [out_prefix '_table3_auc_20_comparisons.csv']);
     export_auc_inference_latex(auc_table, [out_prefix '_table3_auc_20_comparisons.tex']);
-
 
     fprintf('  Saved: %s_table_iii_performance.csv/.tex\n', out_prefix);
     fprintf('  Saved: %s_table2_ablation_diagnostics.csv/.tex\n', out_prefix);
@@ -2289,8 +2198,7 @@ function performance_table = build_performance_table(feature_table)
             if ismember('time_to_target_50_censored', feature_table.Properties.VariableNames)
                 censored_n = sum(feature_table.time_to_target_50_censored(idx));
             else
-                % Backward-compatible recovery for the existing fixed-budget
-                % file, in which non-events were stored as 1000.
+                % Recover censored values stored as 1000 in legacy fixed-budget files.
                 censored_n = sum(t50_values >= 1000);
             end
 
@@ -2585,10 +2493,7 @@ function s = latex_escape(x)
     s = strrep(s, '&', '\&');
 end
 
-
-%% =========================================================================
-%  FIGURE GENERATION
-% =========================================================================
+%% FIGURE GENERATION
 
 function generate_figures(feature_table, summary_table, all_results, out_prefix) %#ok<INUSL>
     fprintf('\n=== Generating paper figures ===\n');
@@ -2646,7 +2551,6 @@ function draw_grouped_bar(means, stds, bgf_labels, mode_labels, S, colors)
     end
     hold on;
     gw = min(0.8, nbars/(nbars+1.5));
-    % 计算每一组中每个柱子的横坐标
     xs = zeros(ngroups, nbars);
     for j = 1:nbars
         xs(:,j) = (1:ngroups) - gw/2 + (2*j-1)*gw/(2*nbars);
@@ -2658,7 +2562,6 @@ function draw_grouped_bar(means, stds, bgf_labels, mode_labels, S, colors)
 
     xticks(1:ngroups);
     xticklabels(upper(bgf_labels));
-    % 使用 paper_mode_label 生成美观的图例标签
     display_labels = cell(1, length(mode_labels));
     for j = 1:length(mode_labels)
         display_labels{j} = char(paper_mode_label(mode_labels{j}));
@@ -2723,14 +2626,12 @@ function fig = fig_ablation_mechanisms(feature_table, S)
                  'Color','w','PaperPositionMode','auto');
     tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
 
-    % (a) Harmful DC interventions
     nexttile;
     [M,E] = compute_group_stats(feature_table,'negative_dc_gain_rate',bgfs,modes);
     draw_grouped_bar(M,E,bgfs,modes,S,C);
     ylabel('Negative DC Gain Rate');
     title('(a) Harmful DC interventions');
 
-    % (b) Stability
     nexttile;
     [M,E] = compute_group_stats(feature_table,'stability_index',bgfs,modes);
     draw_grouped_bar(M,E,bgfs,modes,S,C);
@@ -2834,13 +2735,11 @@ function fig = fig_stf_metric_summary(feature_table, S)
         b(i).FaceAlpha = 0.88;
     end
 
-
     xticks(1:length(metric_fields));
     xticklabels(metric_labels);
     ylabel('Mean Value','FontSize',S.label_size,'FontName',S.font_name);
     title('TSIF Metric Summary by Control Mode', ...
           'FontSize',S.title_size,'FontName',S.font_name);
-    % 使用 paper_mode_label 生成图例
     leg_labels = cell(1, length(modes));
     for i = 1:length(modes)
         leg_labels{i} = char(paper_mode_label(modes{i}));
@@ -2977,14 +2876,11 @@ function fig = fig_representative_trajectories(data, S)
         xlabel('x'); ylabel('y');
         title(sprintf('%s (AUC %.3f)',labels{q},F.error_auc(rows(q))));
     end
-    % Panel titles carry the run ranks and AUCs. A super-title is omitted
-    % because it overlaps the middle panel title in MATLAB R2020b export.
+    % Panel titles report run rank and AUC; a super-title is omitted to avoid
+    % overlap in MATLAB R2020b exports.
 end
 
-
-%% =========================================================================
-%  BGF FUNCTIONS AND VISUALIZATION
-% =========================================================================
+%% BGF FUNCTIONS AND VISUALIZATION
 
 function f = make_bgf(bgf_type)
     switch lower(bgf_type)
@@ -3054,10 +2950,7 @@ function BGFvisual_contour(f, bgf_name)
     hold on; plot(0,0,'r*','MarkerSize',8); hold off;
 end
 
-
-%% =========================================================================
-%  UTILITY FUNCTIONS AND METRIC VALIDATION
-% =========================================================================
+%% UTILITY FUNCTIONS AND METRIC VALIDATION
 
 function nps = nps_gen(N, bound, region)
     flag    = randi(region(1)*region(2)) - 1;
