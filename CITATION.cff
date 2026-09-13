@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying manuscript."
+title: "TSIF for Computational Nanobiosensing"
+type: software
+version: 1.0.0
+date-released: 2026-09-13
+authors:
+  - family-names: Ren
+    given-names: Baoyu
+  - family-names: Wen
+    given-names: Shanchao
+  - family-names: Sun
+    given-names: Yue
+  - family-names: Chen
+    given-names: Yifan
+preferred-citation:
+  type: article
+  title: "Triadic Swarm Intelligence Framework: Toward an Interpretable Process-Level State Descriptor for Computational Nanobiosensing"
+  authors:
+    - family-names: Ren
+      given-names: Baoyu
+    - family-names: Wen
+      given-names: Shanchao
+    - family-names: Sun
+      given-names: Yue
+    - family-names: Chen
+      given-names: Yifan
+  year: 2026
