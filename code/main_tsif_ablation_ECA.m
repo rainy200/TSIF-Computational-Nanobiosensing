@@ -1,4 +1,4 @@
-function main_stf_ablation_ECA(run_mode)
+function main_tsif_ablation_ECA(run_mode)
     clc; close all;
 
     if nargin < 1
