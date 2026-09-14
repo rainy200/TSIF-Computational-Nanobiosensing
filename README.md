@@ -84,6 +84,14 @@ Each formal program writes run-level records, pooled and factorial summaries, st
 
 Process-error AUC is a lower-is-better metric. Manuscript statements should be based on a completed formal run and the generated paired inference tables, rather than on smoke or parameter-development runs.
 
+## Experimental Data
+
+The experimental data are available in the
+[data release](https://github.com/rainy200/TSIF-Computational-Nanobiosensing/releases/tag/data-v1.0).
+
+Download the two ZIP files under **Assets**.
+
+
 ## Reproducibility notes
 
 - Method comparisons use matched scenarios and random streams.
